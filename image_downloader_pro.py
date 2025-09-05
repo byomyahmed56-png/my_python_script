@@ -4,91 +4,80 @@ import requests
 from bs4 import BeautifulSoup
 import os
 from urllib.parse import urljoin
+import threading
 
-# وظيفة تنزيل صورة واحدة
+# ----- وظيفة تنزيل صورة واحدة -----
 def download_single_image(url, folder):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url.strip(), headers=headers)
         response.raise_for_status()
-        filename = os.path.join(folder, url.split("/")[-1])
-        with open(filename, "wb") as f:
+        filename = os.path.join(folder, url.split('/')[-1])
+        with open(filename, 'wb') as f:
             f.write(response.content)
-        return f"✅ {filename}"
+        return True, filename
     except Exception as e:
-        return f"❌ Failed: {url} ({e})"
+        return False, f'{url} ({e})'
 
-# اختيار مجلد الحفظ
+# ----- اختيار مجلد -----
 def browse_folder(entry_widget):
     folder_selected = filedialog.askdirectory()
     if folder_selected:
         entry_widget.delete(0, tk.END)
         entry_widget.insert(0, folder_selected)
 
-# ----------- تبويب 1: صورة واحدة ----------- #
+# ----- تبويب 1: صورة واحدة -----
 def download_from_single():
-    url = single_url_entry.get()
-    folder = single_folder_entry.get() or "images"
-
-    if not url.strip():
+    url = single_url_entry.get().strip()
+    folder = single_folder_entry.get() or 'images'
+    if not url:
         messagebox.showwarning("Warning", "Please enter an image URL!")
         return
-
     if not os.path.exists(folder):
         os.makedirs(folder)
+    success, msg = download_single_image(url, folder)
+    messagebox.showinfo("Result", f"✅ Success: {msg}" if success else f"❌ Failed: {msg}")
 
-    # Progress window
-    progress_win = tk.Toplevel(root)
-    progress_win.title("Downloading...")
-    tk.Label(progress_win, text="Downloading image...").pack(pady=10)
-    progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=1)
-    progress.pack(padx=20, pady=20)
-
-    result = download_single_image(url, folder)
-    progress['value'] = 1
-    progress_win.update_idletasks()
-
-    messagebox.showinfo("Result", result)
-    progress_win.destroy()
-
-# ----------- تبويب 2: روابط متعددة ----------- #
+# ----- تبويب 2: روابط متعددة مع Progress Bar -----
 def download_from_list():
-    urls = multi_text_box.get("1.0", tk.END).strip().split("\n")
-    folder = multi_folder_entry.get() or "images"
-
-    if not urls or urls == [""]:
+    urls = [u.strip() for u in multi_text_box.get('1.0', tk.END).splitlines() if u.strip()]
+    folder = multi_folder_entry.get() or 'images'
+    if not urls:
         messagebox.showwarning("Warning", "Please enter at least one image URL!")
         return
-
     if not os.path.exists(folder):
         os.makedirs(folder)
+    
+    progress['maximum'] = len(urls)
+    progress['value'] = 0
+    results_text.delete('1.0', tk.END)
 
-    # Progress window
-    progress_win = tk.Toplevel(root)
-    progress_win.title("Downloading...")
-    tk.Label(progress_win, text="Downloading images...").pack(pady=10)
-    progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=len(urls))
-    progress.pack(padx=20, pady=20)
+    success_count = 0
+    fail_count = 0
 
-    results = []
-    for i, url in enumerate(urls, 1):
-        if url.strip():
-            results.append(download_single_image(url, folder))
-        progress['value'] = i
-        progress_win.update_idletasks()
+    def batch_download():
+        nonlocal success_count, fail_count
+        for url in urls:
+            success, msg = download_single_image(url, folder)
+            if success:
+                success_count += 1
+                results_text.insert(tk.END, f'✅ {msg}\n')
+            else:
+                fail_count += 1
+                results_text.insert(tk.END, f'❌ {msg}\n')
+            progress['value'] += 1
+            root.update_idletasks()
+        messagebox.showinfo("Batch Download Complete", f"Success: {success_count}\nFailed: {fail_count}")
 
-    messagebox.showinfo("Download Results", "\n".join(results))
-    progress_win.destroy()
+    threading.Thread(target=batch_download).start()
 
-# ----------- تبويب 3: صفحة ويب ----------- #
+# ----- تبويب 3: صفحة ويب -----
 def download_from_webpage():
-    page_url = webpage_url_entry.get()
-    folder = webpage_folder_entry.get() or "images"
-
-    if not page_url.strip():
+    page_url = webpage_url_entry.get().strip()
+    folder = webpage_folder_entry.get() or 'images'
+    if not page_url:
         messagebox.showwarning("Warning", "Please enter a webpage URL!")
         return
-
     if not os.path.exists(folder):
         os.makedirs(folder)
 
@@ -96,87 +85,103 @@ def download_from_webpage():
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(page_url, headers=headers)
         response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-        img_tags = soup.find_all("img")
-
+        soup = BeautifulSoup(response.text, 'html.parser')
+        img_tags = soup.find_all('img')
         if not img_tags:
             messagebox.showinfo("Result", "No images found on this page.")
             return
 
-        # Progress window
-        progress_win = tk.Toplevel(root)
-        progress_win.title("Downloading...")
-        tk.Label(progress_win, text="Downloading images from webpage...").pack(pady=10)
-        progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=len(img_tags))
-        progress.pack(padx=20, pady=20)
+        progress['maximum'] = len(img_tags)
+        progress['value'] = 0
+        results_text.delete('1.0', tk.END)
+        success_count = 0
+        fail_count = 0
 
-        results = []
-        for i, img in enumerate(img_tags, 1):
-            img_url = img.get("src")
-            if img_url:
-                full_url = urljoin(page_url, img_url)
-                results.append(download_single_image(full_url, folder))
-            progress['value'] = i
-            progress_win.update_idletasks()
+        def web_download():
+            nonlocal success_count, fail_count
+            for img in img_tags:
+                img_url = img.get('src')
+                if img_url:
+                    full_url = urljoin(page_url, img_url)
+                    success, msg = download_single_image(full_url, folder)
+                    if success:
+                        success_count += 1
+                        results_text.insert(tk.END, f'✅ {msg}\n')
+                    else:
+                        fail_count += 1
+                        results_text.insert(tk.END, f'❌ {msg}\n')
+                    progress['value'] += 1
+                    root.update_idletasks()
+            messagebox.showinfo("Webpage Download Complete", f"Success: {success_count}\nFailed: {fail_count}")
 
-        messagebox.showinfo("Download Results", "\n".join(results))
-        progress_win.destroy()
+        threading.Thread(target=web_download).start()
 
     except Exception as e:
         messagebox.showerror("Error", f"Failed to fetch webpage:\n{e}")
 
-# ----------- الواجهة الرئيسية ----------- #
+# ----- الواجهة الرئيسية -----
 root = tk.Tk()
 root.title("Image Downloader Pro")
-root.geometry("700x550")
+root.geometry("800x600")
 
 notebook = ttk.Notebook(root)
-notebook.pack(fill="both", expand=True, padx=10, pady=10)
+notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
-# تبويب 1: صورة واحدة
+# ----- Tab 1: Single URL -----
 tab1 = tk.Frame(notebook)
 notebook.add(tab1, text="Single URL")
 
-tk.Label(tab1, text="Image URL:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab1, text="Image URL:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
 single_url_entry = tk.Entry(tab1, width=60)
 single_url_entry.grid(row=0, column=1, padx=5, pady=10, columnspan=2)
 
-tk.Label(tab1, text="Save Folder:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab1, text="Save Folder:").grid(row=1, column=0, padx=10, pady=10, sticky='w')
 single_folder_entry = tk.Entry(tab1, width=40)
 single_folder_entry.grid(row=1, column=1, padx=5, pady=10)
 tk.Button(tab1, text="Browse", command=lambda: browse_folder(single_folder_entry)).grid(row=1, column=2, padx=5, pady=10)
 
 tk.Button(tab1, text="Download", command=download_from_single).grid(row=2, column=0, columnspan=3, pady=20)
 
-# تبويب 2: روابط متعددة
+# ----- Tab 2: Multiple URLs -----
 tab2 = tk.Frame(notebook)
 notebook.add(tab2, text="Multiple URLs")
 
-tk.Label(tab2, text="Enter Image URLs (one per line):").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab2, text="Enter Image URLs (one per line):").grid(row=0, column=0, padx=10, pady=10, sticky='w')
 multi_text_box = tk.Text(tab2, height=10, width=70)
 multi_text_box.grid(row=1, column=0, columnspan=3, padx=10, pady=5)
 
-tk.Label(tab2, text="Save Folder:").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab2, text="Save Folder:").grid(row=2, column=0, padx=10, pady=10, sticky='w')
 multi_folder_entry = tk.Entry(tab2, width=40)
 multi_folder_entry.grid(row=2, column=1, padx=5, pady=10)
 tk.Button(tab2, text="Browse", command=lambda: browse_folder(multi_folder_entry)).grid(row=2, column=2, padx=5, pady=10)
 
-tk.Button(tab2, text="Download All", command=download_from_list).grid(row=3, column=0, columnspan=3, pady=20)
+progress = ttk.Progressbar(tab2, orient='horizontal', length=500, mode='determinate')
+progress.grid(row=3, column=0, columnspan=3, pady=10)
 
-# تبويب 3: صفحة ويب
+results_text = tk.Text(tab2, height=10, width=70)
+results_text.grid(row=4, column=0, columnspan=3, padx=10, pady=5)
+
+tk.Button(tab2, text="Download All", command=download_from_list).grid(row=5, column=0, columnspan=3, pady=20)
+
+# ----- Tab 3: Webpage Images -----
 tab3 = tk.Frame(notebook)
 notebook.add(tab3, text="Webpage Images")
 
-tk.Label(tab3, text="Enter Webpage URL:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab3, text="Enter Webpage URL:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
 webpage_url_entry = tk.Entry(tab3, width=60)
 webpage_url_entry.grid(row=0, column=1, padx=5, pady=10, columnspan=2)
 
-tk.Label(tab3, text="Save Folder:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+tk.Label(tab3, text="Save Folder:").grid(row=1, column=0, padx=10, pady=10, sticky='w')
 webpage_folder_entry = tk.Entry(tab3, width=40)
 webpage_folder_entry.grid(row=1, column=1, padx=5, pady=10)
 tk.Button(tab3, text="Browse", command=lambda: browse_folder(webpage_folder_entry)).grid(row=1, column=2, padx=5, pady=10)
 
-tk.Button(tab3, text="Download Images", command=download_from_webpage).grid(row=2, column=0, columnspan=3, pady=20)
+progress_web = ttk.Progressbar(tab3, orient='horizontal', length=500, mode='determinate')
+progress_web.grid(row=2, column=0, columnspan=3, pady=10)
+
+results_web_text = tk.Text(tab3, height=10, width=70)
+results_web_text.grid(row=3, column=0, columnspan=3, padx=10, pady=5)
+
+tk.Button(tab3, text="Download Images", command=download_from_webpage).grid(row=4, column=0, columnspan=3, pady=20)
 
 root.mainloop()
