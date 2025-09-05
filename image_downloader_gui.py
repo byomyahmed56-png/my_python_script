@@ -28,7 +28,7 @@ def download_image():
     except Exception as e:
         messagebox.showerror("Error", f"Failed to download image:\n{e}")
 
-# وظيفة اختيار المجلد عبر نافذة
+# وظيفة اختيار المجلد
 def browse_folder():
     folder_selected = filedialog.askdirectory()
     if folder_selected:
@@ -38,21 +38,22 @@ def browse_folder():
 # إنشاء النافذة
 root = tk.Tk()
 root.title("Image Downloader")
-root.geometry("500x200")
+root.geometry("600x200")
 
-# واجهة المستخدم
-tk.Label(root, text="Image URL:").pack(pady=(10,0))
-url_entry = tk.Entry(root, width=60)
-url_entry.pack(pady=(0,10))
+# الصف الأول: رابط الصورة
+tk.Label(root, text="Image URL:").grid(row=0, column=0, padx=10, pady=10, sticky="e")
+url_entry = tk.Entry(root, width=50)
+url_entry.grid(row=0, column=1, padx=10, pady=10, columnspan=2)
 
-tk.Label(root, text="Save Folder:").pack()
-folder_entry = tk.Entry(root, width=50)
-folder_entry.pack(side=tk.LEFT, padx=(10,0), pady=(0,10))
-
+# الصف الثاني: المجلد
+tk.Label(root, text="Save Folder:").grid(row=1, column=0, padx=10, pady=10, sticky="e")
+folder_entry = tk.Entry(root, width=40)
+folder_entry.grid(row=1, column=1, padx=10, pady=10)
 browse_btn = tk.Button(root, text="Browse", command=browse_folder)
-browse_btn.pack(side=tk.LEFT, padx=5, pady=(0,10))
+browse_btn.grid(row=1, column=2, padx=10, pady=10)
 
-download_btn = tk.Button(root, text="Download", command=download_image)
-download_btn.pack(pady=(10,0))
+# الصف الثالث: زر التحميل (في النص)
+download_btn = tk.Button(root, text="Download", command=download_image, width=20)
+download_btn.grid(row=2, column=0, columnspan=3, pady=20)
 
 root.mainloop()
