@@ -37,8 +37,19 @@ def download_from_single():
     if not os.path.exists(folder):
         os.makedirs(folder)
 
+    # Progress window
+    progress_win = tk.Toplevel(root)
+    progress_win.title("Downloading...")
+    tk.Label(progress_win, text="Downloading image...").pack(pady=10)
+    progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=1)
+    progress.pack(padx=20, pady=20)
+
     result = download_single_image(url, folder)
+    progress['value'] = 1
+    progress_win.update_idletasks()
+
     messagebox.showinfo("Result", result)
+    progress_win.destroy()
 
 # ----------- تبويب 2: روابط متعددة ----------- #
 def download_from_list():
@@ -52,12 +63,22 @@ def download_from_list():
     if not os.path.exists(folder):
         os.makedirs(folder)
 
+    # Progress window
+    progress_win = tk.Toplevel(root)
+    progress_win.title("Downloading...")
+    tk.Label(progress_win, text="Downloading images...").pack(pady=10)
+    progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=len(urls))
+    progress.pack(padx=20, pady=20)
+
     results = []
-    for url in urls:
+    for i, url in enumerate(urls, 1):
         if url.strip():
             results.append(download_single_image(url, folder))
+        progress['value'] = i
+        progress_win.update_idletasks()
 
     messagebox.showinfo("Download Results", "\n".join(results))
+    progress_win.destroy()
 
 # ----------- تبويب 3: صفحة ويب ----------- #
 def download_from_webpage():
@@ -83,14 +104,24 @@ def download_from_webpage():
             messagebox.showinfo("Result", "No images found on this page.")
             return
 
+        # Progress window
+        progress_win = tk.Toplevel(root)
+        progress_win.title("Downloading...")
+        tk.Label(progress_win, text="Downloading images from webpage...").pack(pady=10)
+        progress = ttk.Progressbar(progress_win, length=400, mode="determinate", maximum=len(img_tags))
+        progress.pack(padx=20, pady=20)
+
         results = []
-        for img in img_tags:
+        for i, img in enumerate(img_tags, 1):
             img_url = img.get("src")
             if img_url:
                 full_url = urljoin(page_url, img_url)
                 results.append(download_single_image(full_url, folder))
+            progress['value'] = i
+            progress_win.update_idletasks()
 
         messagebox.showinfo("Download Results", "\n".join(results))
+        progress_win.destroy()
 
     except Exception as e:
         messagebox.showerror("Error", f"Failed to fetch webpage:\n{e}")
@@ -98,7 +129,7 @@ def download_from_webpage():
 # ----------- الواجهة الرئيسية ----------- #
 root = tk.Tk()
 root.title("Image Downloader Pro")
-root.geometry("700x500")
+root.geometry("700x550")
 
 notebook = ttk.Notebook(root)
 notebook.pack(fill="both", expand=True, padx=10, pady=10)
